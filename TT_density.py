@@ -114,15 +114,14 @@ class TT_svd:
         
 
         y_TT=[]
-        y_aa=[]
+        
         basis_function=generate_basis_mat(self.n, self.dim, self.alpha)
 
         mat_test= basis_function.all_x_multivariate_inverse_alpha(X_test_transform)
         for vec in mat_test:
             temp = TT_prediction().predict(self.dim, self.core_set,vec)
-            y_aa.append(temp)
             y_TT.append(self.new_domain.transform_density_val(temp ))
 
-        return y_TT, y_aa
+        return y_TT 
 
 

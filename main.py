@@ -21,8 +21,8 @@ print( 'n=', n)
 
 
 
-means=[0, 0.5]
-standard_deviations=[0.5,0.5]
+means=[0, 0.3]
+standard_deviations=[0.3,0.3]
 generator = gaussian_mixture(dim, means, standard_deviations )
 X_train=generator.generate(N)
 X_test=generator.generate(N_test)
