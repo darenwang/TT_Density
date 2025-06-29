@@ -2,7 +2,7 @@
 import numpy as np
 from gaussian_mixture import gaussian_mixture
 from density_ultility import KL, kernel_density
-from TT_svd import TT_svd
+from TT_density import TT_svd
 
 
 N=10**5
