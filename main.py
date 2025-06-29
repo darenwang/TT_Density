@@ -6,7 +6,7 @@ from TT_density import TT_svd
 
 
 N=10**5
-dim=20
+dim=50
 n=32
 N_test=10**4
 
@@ -21,8 +21,8 @@ print( 'n=', n)
 
 
 
-means=[0, 0.3]
-standard_deviations=[0.3,0.3]
+means=[0, 0.05]
+standard_deviations=[0.1,0.1]
 generator = gaussian_mixture(dim, means, standard_deviations )
 X_train=generator.generate(N)
 X_test=generator.generate(N_test)
