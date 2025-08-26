@@ -43,7 +43,19 @@ class full_tensor_TT:
 
 
 
-
+class TT_prediction:
+    def __init__(self):
+        pass
+    def predict(self, dim, core_set, vec_set):
+        left  =vec_set[0] @ core_set[0]
+        for d in range(1,dim-1):
+            #left is size r
+            M = np.einsum('anb, n-> ab', core_set[d], vec_set[d])
+            left=  left@M
+        #print(temp.shape,new_core.shape)
+        result= left@core_set[dim-1]@vec_set[dim-1]
+        return result
+"""
 
 class TT_prediction:
     def __init__(self):
@@ -62,3 +74,4 @@ class TT_prediction:
         temp=np.tensordot([vec_set[dim-1]],new_core,axes=(1,0))
         return temp[0]
 
+"""

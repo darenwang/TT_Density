@@ -6,7 +6,7 @@ import numpy as np
 from wavelet import generate_basis_mat
 
 
-from TT_ultility import TT_prediction
+from TT_utility import TT_prediction
 from transform_domain import domain
 
 
