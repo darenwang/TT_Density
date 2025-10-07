@@ -15,8 +15,8 @@ class domain:
             self.lower.append( np.quantile(X_train[:,dd],factor))
         self.upper=np.array(self.upper)
         self.lower=np.array(self.lower) 
-        self.upper= self.upper+ 0.1* (self.upper-self.lower)
-        self.lower= self.lower- 0.1* (self.upper-self.lower)
+        self.upper= self.upper+ 0.001* (self.upper-self.lower)
+        self.lower= self.lower- 0.001* (self.upper-self.lower)
         #print(self.upper)
         #print(self.lower)
         self.difference =self.upper-self.lower
