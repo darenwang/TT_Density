@@ -34,7 +34,7 @@ from nystrom import TT_svd
 ranks=[2 for _ in range(dim-1)]
 n=15
 alpha=1/np.sqrt(dim)/n 
-s=100
+s=300
 for __ in range(20):
     X_train=generator.generate(N)
     X_test=generator.generate(N_test)
