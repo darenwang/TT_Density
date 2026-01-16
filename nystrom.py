@@ -96,18 +96,18 @@ class nystrom:
         return self.core_set 
 
 class TT_svd:
-    def __init__(self, N,dim,n,ranks,alpha,s,X_train) -> None:
+    def __init__(self ,n,ranks,alpha,s,X_train) -> None:
         
  
         self.n=n
-        self.dim=dim
+        N, self.dim=X_train.shape[0], X_train.shape[1]
         self.alpha=alpha
-        self.new_domain=domain(dim, X_train)
+        self.new_domain=domain(self.dim, X_train)
         self.X_train_transform=self.new_domain.compute_data(X_train)
         self.X_train_transform=np.clip(self.X_train_transform, 0, 1)
 
         
-        self.core_set=nystrom (  N,dim,n ,ranks,alpha,s,self.X_train_transform ).all_cores()
+        self.core_set=nystrom (  N,self.dim,n ,ranks,alpha,s,self.X_train_transform ).all_cores()
         #print(self.core_set[0])
     def predict(self, X_test):
 
@@ -125,4 +125,43 @@ class TT_svd:
         #    temp = TT_prediction().predict(self.dim, self.core_set,vec)
         #   y_TT.append(self.new_domain.transform_density_val(temp ))
 
-        return y_TT 
+        return np.clip(y_TT, 1e-14, np.inf) 
+
+from sklearn.model_selection import train_test_split
+
+class nystrom_cv:
+    def __init__(self, N,dim  ,X_train) -> None:
+        
+        
+        #ranks are size dim vector and ranks[j] is the rank of the j-th coordinate
+        self.X=X_train
+        self.X1, self.X2 = train_test_split(X_train, test_size=0.5, random_state=0, shuffle=True)
+
+        self.core_set=[]
+        #self.core_set[j] is the j-th core of size (rank[j-1], n, rank[j]) 
+        ## basis_mat[i][j][k] corresponds to  phi_k(X_i(j)). 
+        
+    
+    def compute(self,set_parameters ):
+        cur_log_likelihood=-np.inf
+        cur_candidate=-1
+        for kk in range(len(set_parameters)):
+            
+            ranks,n,alpha,s = set_parameters[kk]
+            
+            y_TT_cv= TT_svd( n,ranks,alpha,s,self.X1).predict(self.X2)
+            
+            temp_log = np.mean(np.log(  y_TT_cv   )  )
+            if temp_log > cur_log_likelihood:
+                cur_candidate=kk
+                cur_log_likelihood=temp_log
+            #print(kk, temp_log)
+        #print('select', cur_candidate)
+        cv_ranks, cv_n, cv_alpha, cv_s = set_parameters[cur_candidate]
+        
+        TT_model= TT_svd( cv_n,cv_ranks,cv_alpha,cv_s,self.X) 
+        
+        return  TT_model
+        
+    
+    
