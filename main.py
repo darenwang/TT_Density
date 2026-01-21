@@ -114,5 +114,5 @@ print('kde error', kde_error)
 #aa= DensityEstimate().fit(X_train, bounded=False)  
 #logp = aa.score_samples(X_test)
 #y_NN = np.exp(logp)
-#print( 'NN error',  np.linalg.norm(y_NN  -y_true)/np.linalg.norm( y_true)) **2
+#print( 'NN error',  (np.linalg.norm(y_NN  -y_true)/np.linalg.norm( y_true)) **2)
 #####################################
