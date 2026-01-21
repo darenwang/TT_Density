@@ -25,7 +25,14 @@ print( 'dim=', dim)
 from gaussian_mixture import gaussian_mixture
 ###Gaussian 
 means=[-1, 1]
-standard_deviations=[1,1]
+standard_deviations=[0.2,0.2]
+###########################
+###########################
+###########################
+#Larger standard_deviations can produce density values below 10**(−14), which can exceed the numerical precision limits of 64-bit floating-point arithmetic.
+###########################
+###########################
+###########################
 generator = gaussian_mixture(dim, means, standard_deviations )
 
 """
