@@ -33,7 +33,10 @@ class polynomial:
         powers_x = np.vander(new_x,self.n, increasing=True)
         return powers_x @ self.coef_mat_alpha.T
     
-    
+    def scalar_all_basis_alpha(self, x):
+        new_x = 2.0 * x - 1.0
+        powers_x = new_x ** np.arange(self.n)                 # shape (n,)
+        return powers_x @ self.coef_mat_alpha.T 
 
 
 #n=5
@@ -58,15 +61,4 @@ class generate_basis_mat:
         return basis_mat_flat.reshape(len(self.data), self.dim, self.n)
     
 
-
-
-
-
-
-
-        
-
-
-
-
-
+ 
