@@ -48,8 +48,7 @@ class nystrom:
         ## basis_mat[i][j][k] corresponds to  phi_k(X_i(j)). 
         
         
-        basis_mat=generate_basis_mat(n, dim,alpha,X_train).compute()
-        self.basis_mat =  basis_mat.transpose(1, 0, 2).copy()
+        self.basis_mat =  generate_basis_mat(n, dim,alpha,X_train).compute().transpose(1, 0, 2) 
         
         
 
