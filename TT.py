@@ -103,7 +103,7 @@ class nystrom:
 #################
 #################
 ################# compute density value
-from  sampling_1D import Legendre_Sampler
+from  sampling_1D_2 import Legendre_Sampler
 
 
 

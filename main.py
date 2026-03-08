@@ -42,7 +42,7 @@ generator = sin_cos_mixture(dim, scale, scale,[0.5, 0.5])
 X_train=generator.generate(N)
 x_given=np.array([0.6, 0.3,0.1   ])
 dim_given=len(x_given)
-X_test_conditional=sin_cos_mixture(dim, scale, scale,[0.5, 0.5]).conditional_generate(x_given, N_test)[:,dim_given:]
+X_test_conditional=sin_cos_mixture(dim, scale, scale,[0.5, 0.5]).conditional_generate(x_given, N_test*10)[:,dim_given:]
 
 X_test=generator.generate(N_test)
 y_test=generator.value(X_test)
@@ -77,9 +77,9 @@ TT_model= TT(n,ranks,alpha,s, X_train)
 
 X_TT = TT_model.conditional_sample(np.array(x_given), N_test)
 
-from Wasserstein import sliced_wasserstein_2 
+from distance import mean_cov_distance
 
-e_TT=sliced_wasserstein_2(X_TT  , X_test_conditional)
+e_TT=mean_cov_distance(X_TT  , X_test_conditional)
 
 print('TT conditional sampling error', e_TT   )
 
@@ -102,7 +102,7 @@ X_vae = conditional_samples_cvae(
     )[:,dim_given:]
 
 
-e_vae=sliced_wasserstein_2(X_vae  , X_test_conditional)
+e_vae=mean_cov_distance(X_vae  , X_test_conditional)
 
 print('e_vae conditional sampling error', e_vae   )
 #np.mean(X_vae, axis=0)
