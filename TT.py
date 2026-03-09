@@ -283,7 +283,7 @@ class domain:
             self.lower.append( np.quantile(X_train[:,dd],factor))
         self.upper=np.array(self.upper)
         self.lower=np.array(self.lower) 
-        self.upper,self.lower = self.upper+ 0.001* (self.upper-self.lower),self.lower- 0.001* (self.upper-self.lower)
+        #self.upper,self.lower = self.upper+ 0.01* (self.upper-self.lower),self.lower- 0.01* (self.upper-self.lower)
 
         #print(self.upper)
         #print(self.lower)
