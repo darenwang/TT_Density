@@ -1,11 +1,12 @@
 import numpy as np
 
+from distance import mean_cov_distance
 
 
 
 
-dim =50
-N=dim*1000
+dim =5
+N=dim*5000
 N_test=5000
 print('dim=', dim, ', N=', N, ', N_test=', N_test)
 
@@ -64,30 +65,21 @@ y_test= sin_sum_density(scale, dim, X_test)
 #######################################
 #######################################
 ####################################### conditional sampling
-from TT import TT 
+from TT      import TT 
 ranks=[3 for _ in range(dim-1)]
-n=10
+n=30
 s=300
-alpha=1/np.sqrt(dim*n) 
+alpha=1/np.sqrt(dim*n)
 
 TT_model= TT(n,ranks,alpha,s, X_train)
 
-
-
-
 X_TT = TT_model.conditional_sample(np.array(x_given), N_test)
 
-from distance import mean_cov_distance
 
 e_TT=mean_cov_distance(X_TT  , X_test_conditional)
 
 print('TT conditional sampling error', e_TT   )
 
-#XX_TT=TT_model.sample(N_test)
-#print('TT Unconditional sampling error',sliced_wasserstein_2(XX_TT  , X_test))
-
-
-#####################conditional sampling
 
 from VAE import conditional_samples_cvae
 
@@ -97,7 +89,7 @@ X_vae = conditional_samples_cvae(
         x_given=x_given,
         N_sample=N_test,
         idx_given=None,     # assumes first 3 dims are given
-        epochs=500,
+        epochs=200,
         verbose=True
     )[:,dim_given:]
 
@@ -105,18 +97,17 @@ X_vae = conditional_samples_cvae(
 e_vae=mean_cov_distance(X_vae  , X_test_conditional)
 
 print('e_vae conditional sampling error', e_vae   )
-#np.mean(X_vae, axis=0)
 
 
+#####density
 
 
  
-#######################################
-#######################################
-#######################################
-####################################### Density Estimation
+
+
 y_TT=TT_model.predict(X_test)
 print('TT density estimation error (L_2)',np.linalg.norm(y_TT- y_test)/ np.linalg.norm(  y_test))
+  
 
 from kde import kernel_density
 KDE= kernel_density(X_train)
