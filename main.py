@@ -5,8 +5,8 @@ from distance import mean_cov_distance
 
 
 
-dim =5
-N=dim*5000
+dim =20
+N=dim*1000
 N_test=5000
 print('dim=', dim, ', N=', N, ', N_test=', N_test)
 
