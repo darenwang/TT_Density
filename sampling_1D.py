@@ -1,165 +1,222 @@
+import math
 import numpy as np
-from numpy.polynomial.legendre import leg2poly
+from numpy.polynomial import Polynomial
+from numpy.polynomial.legendre import Legendre
 from numpy.polynomial.polynomial import polyval
 
 
-def _pava_increasing(y, w):
+def shifted_legendre_coef(n, normalized=True):
     """
-    Weighted isotonic regression (increasing) via PAVA.
-    Minimizes sum_i w_i (y_i - yhat_i)^2 subject to yhat nondecreasing.
+    Return Coef of shape (n, n), where row k contains the monomial
+    coefficients of the k-th shifted Legendre basis polynomial on [0,1].
+
+    If normalized=True, basis_k(x) = sqrt(2k+1) * P_k(2x-1).
     """
-    y = np.asarray(y, dtype=float)
-    w = np.asarray(w, dtype=float)
-    n = y.size
-    if w.shape != y.shape:
-        raise ValueError("w must have the same shape as y")
+    if n < 1:
+        raise ValueError("n must be at least 1")
 
-    starts = np.empty(n, dtype=int)
-    ends = np.empty(n, dtype=int)
-    ws = np.empty(n, dtype=float)
-    ms = np.empty(n, dtype=float)
+    Coef = np.zeros((n, n), dtype=float)
 
-    m = 0
-    for i in range(n):
-        starts[m] = i
-        ends[m] = i
-        ws[m] = w[i]
-        ms[m] = y[i]
+    x_poly = Polynomial([0.0, 1.0])   # x
+    t_poly = 2.0 * x_poly - 1.0       # 2x - 1
 
-        while m > 0 and ms[m - 1] > ms[m]:
-            w_new = ws[m - 1] + ws[m]
-            m_new = (ws[m - 1] * ms[m - 1] + ws[m] * ms[m]) / w_new
-            ws[m - 1] = w_new
-            ms[m - 1] = m_new
-            ends[m - 1] = ends[m]
-            m -= 1
+    for k in range(n):
+        Pk_t = Legendre.basis(k).convert(kind=Polynomial)   # P_k(t)
+        fk_x = Pk_t(t_poly)                                 # P_k(2x-1)
 
-        m += 1
+        if normalized:
+            fk_x = np.sqrt(2 * k + 1) * fk_x
 
-    y_hat = np.empty(n, dtype=float)
-    for j in range(m):
-        y_hat[starts[j] : ends[j] + 1] = ms[j]
-    return y_hat
+        coef = fk_x.coef
+        Coef[k, :len(coef)] = coef
+
+    return Coef
 
 
 class Legendre_Sampler:
     """
-    Sample on [0,1] from g(x)/∫_0^1 g using:
-      1) build F(x)=G(x)/Z on a grid
-      2) isotonic regression to enforce monotone CDF
-      3) invert by interpolation
+    Sampler on [0,1] using a Bernstein positive envelope.
 
-    Randomness:
-      - internal np.random.default_rng(), no seed specified
-      - no rng parameter exposed
+    If
+        g(x) = sum_j a[j] * phi_j(x),
+    where phi_j are shifted Legendre basis functions, then this class:
+
+      1) converts g into monomial coefficients,
+      2) converts g into Bernstein coefficients b_k,
+      3) builds h(x) = sum_k max(b_k, 0) * B_{k,m}(x),
+      4) samples from normalized h as a Beta mixture,
+      5) accepts with probability g^+(x) / h(x).
+
+    Therefore sample(a, ...) returns draws from a density proportional to g^+.
+    If g >= 0 on [0,1], this is exactly sampling from normalized g.
     """
 
-    def __init__(self, n: int):
+    def __init__(self, n: int, normalized=True, seed=None):
         if n < 1:
             raise ValueError("n must be >= 1")
+
         self.n = int(n)
-        self._rng = np.random.default_rng()
+        self.degree = self.n - 1
+        self.normalized = normalized
+        self._rng = np.random.default_rng(seed)
 
-        # Build coef_f for f_k(x) = sqrt(2k+1) P_k(t), as monomials in t=2x-1
-        coef_leg = np.zeros((self.n, self.n), dtype=float)
-        for k in range(self.n):
-            c = np.zeros(k + 1, dtype=float)
-            c[-1] = 1.0
-            pk = leg2poly(c)                      # P_k(t) in monomials
-            coef_leg[k, : pk.shape[0]] = pk
+        # coef_f[k] = monomial coefficients of basis function phi_k(x)
+        self.coef_f = shifted_legendre_coef(self.n, normalized=self.normalized)
 
-        scale = np.sqrt(2.0 * np.arange(self.n, dtype=float) + 1.0)
-        coef_f = coef_leg * scale[:, None]        # (n, n)
-
-        # Build coef_F for F_k(x)=∫_0^x f_k(u)du, as monomials in t
-        coef_F = np.zeros((self.n, self.n + 1), dtype=float)
-        denom = 2.0 * (np.arange(self.n, dtype=float) + 1.0)  # 2(m+1)
-        coef_F[:, 1:] = coef_f / denom[None, :]
-
-        # enforce F_k(0)=0: at x=0, t=-1 so t^m = (-1)^m
-        signs = (-1.0) ** np.arange(self.n + 1, dtype=float)
-        coef_F[:, 0] -= coef_F @ signs
-
-        self.coef_F = coef_F                      # (n, n+1)
-        self._grid_cache = {}                     # optional speed: cache (xg,tg,w)
-
-    def _mass_poly(self, a):
+    def _density_poly(self, a):
+        """
+        Return monomial coefficients c of
+            g(x) = sum_{j=0}^{n-1} c[j] x^j
+        """
         a = np.asarray(a, dtype=float).reshape(-1)
         if a.shape[0] != self.n:
             raise ValueError(f"a must have length {self.n}")
-        coef_G = a @ self.coef_F                  # (n+1,)
-        Z = float(polyval(1.0, coef_G))           # x=1 => t=1
-        return coef_G, Z
+        return a @ self.coef_f
 
-    def _get_grid(self, grid_size, anchor_weight):
-        key = (int(grid_size), float(anchor_weight))
-        if key in self._grid_cache:
-            return self._grid_cache[key]
-
-        grid_size = key[0]
-        if grid_size < 16:
-            raise ValueError("grid_size should be at least 16 for stability.")
-
-        xg = np.linspace(0.0, 1.0, grid_size, dtype=float)
-        tg = 2.0 * xg - 1.0
-        w = np.ones(grid_size, dtype=float)
-        w[0] = w[-1] = key[1]
-        self._grid_cache[key] = (xg, tg, w)
-        return xg, tg, w
-
-    def _inv_cdf_isotonic(self, u, coef_G, Z, grid_size, anchor_weight):
-        
-        #########pay attension here
-        #########floating points
-        if not np.isfinite(Z) or Z <= 0.0:
-            
-            raise ValueError(f"Mass Z must be positive and finite. Got Z={Z}.")
-
-        u = np.asarray(u, dtype=float)
-        if np.any(u < 0.0) or np.any(u > 1.0):
-            raise ValueError("u must be in [0,1].")
-
-        xg, tg, w = self._get_grid(grid_size, anchor_weight)
-
-        Fg = polyval(tg, coef_G) / Z
-        Fg = np.asarray(Fg, dtype=float)
-        Fg[0] = 0.0
-        Fg[-1] = 1.0
-        Fg = np.clip(Fg, 0.0, 1.0)
-
-        F_iso = _pava_increasing(Fg, w=w)
-
-        # normalize to [0,1] exactly
-        lo, hi = float(F_iso[0]), float(F_iso[-1])
-        if hi <= lo + 1e-15:
-            return u.copy()
-
-        F_iso = (F_iso - lo) / (hi - lo)
-        F_iso[0] = 0.0
-        F_iso[-1] = 1.0
-        F_iso = np.maximum.accumulate(F_iso)
-
-        # remove duplicates for interp stability
-        F_unique, idx = np.unique(F_iso, return_index=True)
-        x_unique = xg[idx]
-        if F_unique.size < 2:
-            return u.copy()
-
-        return np.interp(u, F_unique, x_unique)
-
-    def sample(self, a, size=1, grid_size=1024, anchor_weight=1e6, eps_mass=10**-9):
+    def f(self, a, x):
         """
-        Draw samples from g(x)/∫ g using isotonic-regression inversion.
+        Evaluate g(x).
         """
-        a = np.asarray(a, dtype=float).reshape(-1).copy()
+        coef_g = self._density_poly(a)
+        return polyval(x, coef_g)
+
+    def _monomial_to_bernstein(self, c):
+        """
+        Convert monomial coefficients c of degree m polynomial
+            p(x) = sum_{j=0}^m c[j] x^j
+        into Bernstein coefficients b of degree m:
+            p(x) = sum_{k=0}^m b[k] B_{k,m}(x)
+
+        Formula:
+            b[k] = sum_{j=0}^k c[j] * C(k,j) / C(m,j)
+        """
+        c = np.asarray(c, dtype=float).reshape(-1)
+        m = c.size - 1
+        b = np.zeros(m + 1, dtype=float)
+
+        for k in range(m + 1):
+            s = 0.0
+            for j in range(k + 1):
+                s += c[j] * math.comb(k, j) / math.comb(m, j)
+            b[k] = s
+
+        return b
+
+    def bernstein_coef(self, a):
+        """
+        Return Bernstein coefficients of g on [0,1].
+        """
+        coef_g = self._density_poly(a)
+        return self._monomial_to_bernstein(coef_g)
+
+    def _bernstein_eval(self, b, x):
+        """
+        Evaluate a Bernstein polynomial
+            p(x) = sum_k b[k] B_{k,m}(x)
+        by de Casteljau's algorithm.
+        """
+        b = np.asarray(b, dtype=float).reshape(-1)
+        x = np.asarray(x, dtype=float)
+
+        scalar_input = (x.ndim == 0)
+        x_flat = x.reshape(-1)
+
+        temp = np.tile(b, (x_flat.size, 1))
+        one_minus_x = 1.0 - x_flat
+        m1 = b.size
+
+        for r in range(1, m1):
+            temp[:, :m1 - r] = (
+                one_minus_x[:, None] * temp[:, :m1 - r]
+                + x_flat[:, None] * temp[:, 1:m1 - r + 1]
+            )
+
+        out = temp[:, 0]
+        if scalar_input:
+            return float(out[0])
+        return out.reshape(x.shape)
+
+    def h(self, a, x):
+        """
+        Evaluate the Bernstein positive envelope
+            h(x) = sum_k max(b_k, 0) B_{k,m}(x),
+        where b_k are the Bernstein coefficients of g.
+        """
+        b = self.bernstein_coef(a)
+        b_plus = np.clip(b, 0.0, np.inf)
+        return self._bernstein_eval(b_plus, x)
+
+    def sample(self, a, size=1, batch_size=None, upper_bound_threshold=1e-9):
+        """
+        Draw samples from a density proportional to g^+(x) on [0,1],
+        where g^+(x) = max(g(x), 0).
+    
+        If the Bernstein upper bound
+            M = max_k b_k^+
+        is <= upper_bound_threshold, return -np.inf.
+        """
+        a = np.asarray(a, dtype=float).reshape(-1)
         if a.shape[0] != self.n:
             raise ValueError(f"a must have length {self.n}")
-
-        coef_G, Z = self._mass_poly(a)
-        if Z <= eps_mass:
+    
+        size = int(size)
+        if size < 1:
+            raise ValueError("size must be >= 1")
+    
+        # Bernstein coefficients of g
+        b = self.bernstein_coef(a)
+    
+        # Positive Bernstein envelope coefficients
+        b_plus = np.clip(b, 0.0, np.inf)
+    
+        # Bernstein-based global upper bound of h, hence also of g^+
+        M = float(np.max(b_plus))
+        if (not np.isfinite(M)) or (M <= upper_bound_threshold):
             return -np.inf
-            #a[0] = max(a[0], eps_mass)           # minimal mass repair
-            #coef_G, Z = self._mass_poly(a)
-
-        u = self._rng.random(int(size))
-        return self._inv_cdf_isotonic(u, coef_G, Z, grid_size=grid_size, anchor_weight=anchor_weight)[0]
+    
+        s = float(np.sum(b_plus))
+        if (not np.isfinite(s)) or (s <= 0.0):
+            return -np.inf
+    
+        # Proposal q is normalized h.
+        # Since (m+1) B_{k,m}(x) is Beta(k+1, m-k+1) density,
+        # q is a mixture of Beta(k+1, m-k+1) with weights proportional to b_plus[k].
+        weights = b_plus / s
+    
+        out = np.empty(size, dtype=float)
+        filled = 0
+    
+        while filled < size:
+            m_batch = (
+                max(1024, 4 * (size - filled))
+                if batch_size is None
+                else max(int(batch_size), size - filled)
+            )
+    
+            # Sample proposal component
+            k = self._rng.choice(self.degree + 1, size=m_batch, p=weights)
+    
+            # Sample from Beta(k+1, degree-k+1)
+            x = self._rng.beta(k + 1, self.degree - k + 1)
+    
+            # Compute acceptance probability g^+(x) / h(x)
+            gx = np.asarray(self.f(a, x), dtype=float)
+            g_plus = np.clip(gx, 0.0, np.inf)
+            hx = self._bernstein_eval(b_plus, x)
+    
+            accept_prob = np.divide(
+                g_plus,
+                hx,
+                out=np.zeros_like(g_plus),
+                where=(hx > 0.0),
+            )
+            accept_prob = np.clip(accept_prob, 0.0, 1.0)
+    
+            keep = x[self._rng.random(m_batch) <= accept_prob]
+    
+            n_take = min(size - filled, keep.size)
+            if n_take > 0:
+                out[filled:filled + n_take] = keep[:n_take]
+                filled += n_take
+    
+        return float(out[0]) if size == 1 else out
