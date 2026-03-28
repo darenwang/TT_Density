@@ -44,7 +44,6 @@ X_train=generator.generate(N)
 x_given=np.array([0.6, 0.3,0.1   ])
 dim_given=len(x_given)
 X_test_conditional=sin_cos_mixture(dim, scale, scale,[0.5, 0.5]).conditional_generate(x_given, N_test*10)[:,dim_given:]
-
 X_test=generator.generate(N_test)
 y_test=generator.value(X_test)
 
@@ -73,10 +72,16 @@ alpha=1/np.sqrt(dim*n)
 
 TT_model= TT(n,ranks,alpha,s, X_train)
 
-X_TT = TT_model.conditional_sample(np.array(x_given), N_test)
+X_TT=[]
+for ii in range(5000):
+    if ii%500==0:
+        print(ii)
+    X_TT.append(  TT_model.conditional_sample(np.array(x_given) ))
+X_TT=np.array(X_TT)
 
-
-e_TT=mean_cov_distance(X_TT  , X_test_conditional)
+#y_TT=TT_model.predict(X_test)
+X_TT=TT_model.sample(5000)
+e_TT=mean_cov_distance(X_TT [:,dim_given:] , X_test_conditional)
 
 print('TT conditional sampling error', e_TT   )
 

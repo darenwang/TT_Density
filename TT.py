@@ -118,7 +118,7 @@ class TT:
         self.X_train_transform=self.new_domain.transform_data(X_train)
         self.X_train_transform=np.clip(self.X_train_transform, 0, 1)
         
-        self.count=0
+        
         self.core_set=nystrom (  N,self.dim,n ,ranks,alpha,s,self.X_train_transform ).all_cores()
         
         inv_vec=(alpha**-1)*np.ones(n)
@@ -188,7 +188,7 @@ class TT:
             result[i]= temp       
         X_TT=self.new_domain.inverse_compute_data(result)
         return X_TT
-    def conditional_sampling_one(self,  c_dim ):
+    def _conditional_sampling_one(self,  c_dim ):
         
         result=np.zeros(self.dim)
         
@@ -212,15 +212,16 @@ class TT:
             return False,[]
         return True, result[c_dim:]
     
-    def conditional_sample(self,x_given, N_sample):
+    def conditional_sample(self,x_given):
         c_dim= x_given.shape[0]
         x_given_transform= self.new_domain.transform_partial_data(0,c_dim, x_given)
-        X_conditional_TT=np.zeros((N_sample, self.dim-c_dim))
+        
         
         cur_basis_val= self.polynomial.scalar_all_basis_alpha(x_given_transform[0])
         #condition_mat is (r,1)
         self.condition_mat= np.einsum('n, nr->r', cur_basis_val, self.core_set[0])
         ####Given coordinates
+        count=-1
         for d in range(1, c_dim):
             
             
@@ -229,20 +230,21 @@ class TT:
             self.condition_mat= np.einsum('r, rns, n ->s', self.condition_mat, self.core_set[d],cur_basis_val)
         
         
-        for i in range(N_sample):
-            if i%100==0:
-                print(i)
-            rec, temp =  self.conditional_sampling_one(  c_dim) 
-            while not rec :
-                self.count+=1
-                print('count',self.count)
-                rec,temp =  self.conditional_sampling_one(  c_dim ) 
-            X_conditional_TT[i]= temp
-            #if np.isneginf(X_conditional_TT[i]).all():
-            #    print('error',i)
-        #print(X_conditional_TT)
-        X_conditional_TT=self.new_domain.inverse_partial_data(c_dim,self.dim,X_conditional_TT)
-        return X_conditional_TT 
+        rec=False
+        #rec_2= True
+        while not rec :
+            count+=1
+            if count==1000:
+                distances = np.linalg.norm(self.X_train_transform [:, :c_dim] - x_given_transform, axis=1)
+                index = np.argmin(distances)
+                result= self.X_train_transform[index, c_dim:]
+                rec= True
+                #rec_2=False
+            else:
+                rec,result=  self._conditional_sampling_one(  c_dim ) 
+        sample=self.new_domain.inverse_partial_data(c_dim,self.dim, result)
+        
+        return np.concatenate((x_given, sample)) 
     
     def predict(self, X_test):
 
