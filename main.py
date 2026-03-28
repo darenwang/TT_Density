@@ -80,7 +80,7 @@ for ii in range(5000):
 X_TT=np.array(X_TT)
 
 #y_TT=TT_model.predict(X_test)
-X_TT=TT_model.sample(5000)
+#X_TT=TT_model.sample(5000)
 e_TT=mean_cov_distance(X_TT [:,dim_given:] , X_test_conditional)
 
 print('TT conditional sampling error', e_TT   )
